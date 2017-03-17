@@ -1,0 +1,168 @@
+ <meta charset="utf-8">
+<head>
+<title>House data filtering</title>
+<link rel="stylesheet" href="d3.slider.css" />
+</head>
+
+<body>
+<div id="controls"></div>
+<h3>Filtered houses(lowest Actual/Predicted price ratio first)</h3>
+<div id="records"></div>
+
+
+<script src="d3.js"></script>
+<script src="d3.slider.js"></script>
+<style>
+.d3-slider-horizontal {
+    width: 350px;
+}
+.record{
+margin: 10px;
+border: 1px black solid;
+}
+#records{
+    width:600px;
+}
+#controls{
+    width:400px;
+	float:right;
+}
+</style>
+<script>
+
+var ctrls={
+price:{type:"range",name:"Price range",value_min:10000,value_max:500000,min:0,max:5000000,step:1000},
+tax:{type:"range",name:"Tax range",value_min:0,value_max:10000,min:0,max:100000,step:100},
+year:{type:"range",name:"Year range",value_min:2000,value_max:2010,min:1990,max:2016,step:1},
+bedroom:{type:"range",name:"Bedroom number range",value_min:0,value_max:10,min:0,max:10,step:1},
+bathroom:{type:"range",name:"Bathroon number range",value_min:0,value_max:10,min:0,max:10,step:1},
+lot:{type:"range",name:"Lot range",value_min:0,value_max:10,min:0,max:10,step:1},
+description:{type:"text",name:"Text Description (can search for a place)", value:""}
+//the last one shouldn't have a comma after it
+};
+
+var myrecords;//loaded in the preload at the bottom
+var recordSelection;
+function filterByControls(d)
+{//automatically filters by all ranges; no need for new code if you add new filtering attributes, just change the ctrls variable, and make sure the attributes in ctrls  correspond to data attributes
+	for(var v in ctrls)
+	{
+		if(ctrls[v].type=="range")
+		{	if(v in d==false)continue;
+			if((Number(d[v])>ctrls[v].value_max)||(Number(d[v])<ctrls[v].value_min)){return false;}
+		}
+		if(ctrls[v].type=="text")
+		{
+			if(v in d==false)continue;
+			if(ctrls[v].value)//not empty
+			{
+				if(d[v].indexOf(ctrls[v].value)<0){return false;}
+			}
+		}
+	}
+	//add other kinds of filters here if necessary
+	return true;//true means it will be displayed
+}
+function predictedPrice(d)
+{
+	return d.tax*35.9+d.year*(34.35)+d.bedroom*14379.8 +d.bathroom*111994.7+d.lot*2652.4 +(-244810);
+}
+var displayed;
+function displayRecords()
+{
+	var temp=myrecords.filter(filterByControls);
+	temp=temp.sort(function(a,b){return (a.price/predictedPrice(a))-(b.price/predictedPrice(b));});temp.splice(100);
+	displayed=temp;
+	//only display 100 for now
+	recordSelection=d3.select("#records").selectAll(".record");
+	recordSelection=recordSelection.data(displayed);
+	recordSelection.enter().append("div").attr("class","record");
+	recordSelection.text(toText);recordSelection.exit().remove();
+}
+function toText(d)
+{
+	var t="";
+	for(i in  d){t+=i+": "+d[i]+", ";}
+	t+=" Predicted price: "+predictedPrice(d);
+	t+=" Actual/Predicted ratio: "+d.price/predictedPrice(d);
+	return t;
+}
+function mySlide(evt, value,v) 
+{
+	ctrls[v].value=value;
+	if(typeof(ctrls[v].onChange) =="function"){ctrls[v].onChange()};
+	displayRecords();
+}
+function myRangeSlideMin(evt, value,v) 
+{
+	ctrls[v].value_min=value;//no checks now?
+	if(typeof(ctrls[v].onChange) =="function"){ctrls[v].onChange()};
+	displayRecords();
+}
+function myRangeSlideMax(evt, value,v) 
+{
+	ctrls[v].value_max=value;
+	if(typeof(ctrls[v].onChange) =="function"){ctrls[v].onChange()};
+	displayRecords();
+}
+function myCheck(evt, value,value2,v) 
+{//v: used hack with eval to create functions
+	ctrls[v].value=!(ctrls[v].value);
+	if(typeof(ctrls[v].onChange) =="function"){ctrls[v].onChange()};
+	displayRecords();
+}
+function myTextInput(evt, value,value2,v) 
+{//v: used hack with eval to create functions
+	ctrls[v].value=d3.select(".textarea-"+v)[0][0].value;
+	if(typeof(ctrls[v].onChange) =="function"){ctrls[v].onChange()};
+	displayRecords();
+}
+function initCustomization()
+{
+	var console=d3.select("div");
+	
+	for(var v in ctrls)
+	{
+		if(ctrls[v].type=="number")
+		{
+			var myfun;
+			var slider=d3.slider().axis(true).min(ctrls[v].min).max(ctrls[v].max).step(ctrls[v].step).value(ctrls[v].value)
+			.on("slide",eval("myfun=function(evt,value){mySlide(evt,value,\""+v+"\")}"));//hack
+			var mydiv=console.append("div");mydiv.append("p").text(ctrls[v].name);
+			mydiv.append("div").call(slider);
+			mydiv.append("p").style("display","none").text(v);//hack to save the ctrls variable name in the element
+			
+		}
+		if(ctrls[v].type=="range")
+		{
+			var myfun1;var myfun2;
+			var slider1=d3.slider().axis(true).min(ctrls[v].min).max(ctrls[v].max).step(ctrls[v].step).value(ctrls[v].value_min)
+			.on("slide",eval("myfun1=function(evt,value){myRangeSlideMin(evt,value,\""+v+"\")}"));
+			var slider2=d3.slider().min(ctrls[v].min).max(ctrls[v].max).step(ctrls[v].step).value(ctrls[v].value_max)
+			.on("slide",eval("myfun2=function(evt,value){myRangeSlideMax(evt,value,\""+v+"\")}"));
+			var mydiv=console.append("div");mydiv.append("p").text(ctrls[v].name);
+			mydiv.append("div").call(slider1).call(slider2);
+			mydiv.append("p").style("display","none").text(v);//hack to save the ctrls variable name in the element
+		}
+		if(ctrls[v].type=="boolean")
+		{
+			var myfun;
+			var mydiv=console.append("div");mydiv.append("p").text(ctrls[v].name);
+			mydiv.append("input").attr("type","checkbox").property("checked",ctrls[v].value).on("change",eval("myfun=function(evt,value,value2){myCheck(evt,value,value2,\""+v+"\")}"));
+			mydiv.append("p").style("display","none").text(v);//hack to save the ctrls variable name in the element
+		}
+		if(ctrls[v].type=="text")
+		{
+			var myfun;
+			var mydiv=console.append("div");mydiv.append("p").text(ctrls[v].name);
+			mydiv.append("textarea").attr("cols",48).attr("class","textarea-"+v).property("text",ctrls[v].value).on("input",eval("myfun=function(evt,value,value2){myTextInput(evt,value,value2,\""+v+"\")}"));
+			mydiv.append("p").style("display","none").text(v);//hack to save the ctrls variable name in the element
+		}
+	}
+}
+
+(function preLoad(){
+window.addEventListener('load', function(){d3.csv("house.csv",function(error,csv){myrecords=csv;initCustomization();displayRecords();})});//loads the data into an array with objects with properties like price etc}, false);
+}());
+</script>
+</body>
